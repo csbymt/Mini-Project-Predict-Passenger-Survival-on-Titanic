@@ -1,0 +1,142 @@
+---
+title: 'Mini Project: Predict Passenger Survival on Titanic'
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+To complete this project, please follow the instructions and run each code chunk in a sequential fashion. The two main machine learning algorithms you will use for the modeling in this project are logistic regression and Naive Bayes.
+
+While you are running the code, please read the annotations embedded between each line of code and make sure you understand the meaning of each step. Also, please pay attention to the output results and see if you can interpret the metrics (e.g. coefficients, accuracy). 
+
+Feel free to take notes of the questions you have and exchange ideas with others on the forum. Also, after you go through this whole markdown file, feel welcome to tinker the setting in this file (e.g. visualization, models) to experiment different things and compare with your initial findings.
+
+
+### 1. Import Titanic Dataset:
+```{r eval=FALSE}
+install.packages('titanic')
+install.packages('e1071')
+install.packages('caret')
+library(titanic)
+library(e1071)
+library(caret)
+```
+
+Take a look at the definitions of the variables in this dataset at https://www.kaggle.com/c/titanic/data
+
+### 2. Load and rename dataset
+```{r eval=FALSE}
+data("titanic_train")
+# for simplicity, we can rename the datasets
+data <- titanic_train
+# note: in other types of machine learning, we can also use 'titanic_test' dataset to evaluate model performance. 
+# But in this project we will just build models and make predictions by using the train dataset only.
+```
+
+### 3. Data processing 
+```{r eval=FALSE}
+# check dataframe structure
+str(data)
+# check dimension of dataframe
+dim(data)
+# subset the dataframe by choosing columns we will use for modeling
+data_select <- data[, c('Survived', 'Pclass', 'Sex', 'Age', 'SibSp', 'Parch', 'Fare')]
+# check new dataframe structure
+str(data_select)
+# check if there are missing values in each column
+colSums(is.na(data_select))
+# impute missing data in the age column with median age
+median_age <- median(data_select$Age,na.rm=T)
+data_select$Age[is.na(data_select$Age)] <- median_age
+# check missing values again
+colSums(is.na(data_select))
+# for logistic regression, we have to change 'Survived', 'Pclass', 'Sex' variables into factor variables. Because they are not continuous variables and 'Pclass', 'Sex' need to be transformed into dummy variables
+data_select$Survived <- as.factor(data_select$Survived)
+data_select$Pclass <- as.factor(data_select$Pclass)
+data_select$Sex <- as.factor(data_select$Sex)
+install.packages('dummies')
+library(dummies)
+data_dummy <- dummy.data.frame(data_select, names=c('Pclass', 'Sex'), sep="_")
+```
+
+### 4. Split train/ test dataset
+```{r eval=FALSE}
+# divide data further into train and test subsets (note: this is done based on the "titanic_train")
+# use 70% of data for the train data
+smp_size <- floor(0.7 * nrow(data_dummy))
+## set the seed to make this partition reproducible
+set.seed(123)
+# get index numbers for train dataset 
+train_ind <- sample(seq_len(nrow(data_dummy)), size = smp_size)
+# train/test split
+train <- data_dummy[train_ind, ] 
+test <- data_dummy[-train_ind, ]
+```
+
+### 5. A quick data visualization to see the relatonship between variables
+```{r eval=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
+pairs(train, labels = colnames(train), col = train$Survived, upper.panel = NULL)
+
+legend("right", fill = unique(train$Survived), legend = c(levels(train$Survived)))
+# note: think about the usefulness of this data visualizaton. Is it informative?
+```
+
+### 6. Fit a logistic regression model based on the train data
+```{r eval=FALSE}
+start.time <- Sys.time() # set start time for training this model
+LogitModel <- glm(Survived ~.,family=binomial, data = train)
+end.time <- Sys.time() # set end time for training this model
+paste0('logistic model training time: ', end.time - start.time, ' sec', sep = "")
+# see logistic model summary
+summary(LogitModel)
+# use anova to check table of deviance
+anova(LogitModel, test="Chisq")
+```
+
+### 7. Use the trained logistic regression to make survival predictions on the test data
+```{r eval=FALSE}
+# make new predictions based on the test data
+Logit_pred_survival <- predict(LogitModel, newdata = test, type = 'response')
+# note: if you see a warning message 'prediction from a rank-deficient fit may be misleading', it is not an error but just a warning message. For your reference, you can read this post: https://stackoverflow.com/questions/26558631/predict-lm-in-a-loop-warning-prediction-from-a-rank-deficient-fit-may-be-mis
+
+
+# recode the predicted results. Based on logistic regression, if predicted possibility > 0.5 then we code it as 1 (survival)
+Logit_pred_survival <- ifelse(Logit_pred_survival > 0.5, 1, 0)
+Logit_pred_survival <- as.factor(Logit_pred_survival)
+## use confusion matrix to check our model performance. Compared predicted results with the ground truth 
+library(caret)
+confusionMatrix(data = Logit_pred_survival, reference = test$Survived)
+
+```
+
+### 8. Fit a Naive Bayes model based on the train data
+```{r eval=FALSE}
+# build Naive Bayes model based on train data. We will remove the 1st column (Survived) since it is the target variable
+start.time <- Sys.time() # set start time for training this model
+NBayesModel = naiveBayes(x = train[-1], y = train$Survived)
+end.time <- Sys.time() # set end time for training this model
+paste0(' Naive Bayes model training time: ', end.time - start.time, ' sec', sep = "")
+```
+
+### 9. Use the trained Naive Bayes model to make survival predictions on the test data
+```{r eval=FALSE}
+# make predictions
+NBayes_pred_survival = predict(NBayesModel, newdata = test[-1], type = 'class')
+# creation of confusion matrix to check the model performance
+confusionMatrix(data = NBayes_pred_survival, reference = test$Survived)
+```
+
+###10. Summary of findings:
+
+(1). Do you think the data visualization in this exercise is helpful? Why? Can you think of other ways to visualize your data (e.g. bar chart, pie chart)?     
+
+(2). How will you summarize and compare model performance in this exercise?    
+
+(3). How does time differ regarding training the 2 predictive models? Why is this important? (hint: think of data size, parameters tuning, etc)    
+
+(4). What do you think these predictive models will be useful for in real-life applications? Can you think of some cases you will apply these predictive models in your professional fields?    
+
+Please post your responses for these 4 questions and share on the discussion forum    
+
+
